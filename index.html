@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรแกรมจำลองเสมือนจริง ตอนที่ 2: Tuner & Diode Mixer (DVB-T2)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Sarabun & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .scope-screen {
+            background-color: #030712;
+            background-image: 
+                linear-gradient(rgba(30, 41, 59, 0.45) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 41, 59, 0.45) 1px, transparent 1px),
+                linear-gradient(rgba(51, 65, 85, 0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(51, 65, 85, 0.15) 1px, transparent 1px);
+            background-size: 50px 50px, 50px 50px, 10px 10px, 10px 10px;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-black">
+
+    <!-- Header Section -->
+    <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-bold text-lg">
+                    RF
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">ใบงานที่ 5 : ตอนที่ 2</span>
+                        <h1 class="text-base md:text-lg font-bold text-white tracking-wide">การจำลองภาครับ Tuner, Filter และ Diode Mixer</h1>
+                    </div>
+                    <p class="text-xs text-slate-400">วิชา: โทรทัศน์ระบบดิจิทัล (20105-2016) • แผนกวิชาช่างอิเล็กทรอนิกส์ (ปวช.)</p>
+                </div>
+            </div>
+
+            <!-- Quick Info Badges -->
+            <div class="flex items-center gap-3 text-xs font-mono-code">
+                <div class="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-slate-400">Scale:</span>
+                    <span class="text-emerald-400 font-semibold">1:1,000 (kHz &harr; MHz)</span>
+                </div>
+                <div class="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 hidden sm:flex items-center gap-2">
+                    <span class="text-slate-400">Target IF:</span>
+                    <span class="text-cyan-400 font-bold">36.00 kHz (36 MHz)</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+        <!-- Top Overview & Instructions -->
+        <div class="bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-900 border border-blue-500/30 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="space-y-1">
+                <h2 class="text-sm md:text-base font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    วัตถุประสงค์การทดลองและการวัดสัญญาณ
+                </h2>
+                <p class="text-xs text-slate-300 leading-relaxed max-w-3xl">
+                    สังเกตรูปคลื่นสัญญาณทั้ง 3 จุด: <strong class="text-yellow-400">จุดที่ 1 RF Input</strong>, <strong class="text-fuchsia-400">จุดที่ 2 LO Signal</strong> และ <strong class="text-emerald-400">จุดที่ 3 IF Output</strong> พร้อมปรับตั้งสเกลเวลาและแรงดันเพื่อวิเคราะห์การผสมสัญญาณ Heterodyne
+                </p>
+            </div>
+        </div>
+
+        <!-- 1. Interactive Schematic Section -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded bg-cyan-500"></span>
+                    <h3 class="font-bold text-white text-sm md:text-base">แผนภาพวงจรจำลอง (Tuner RF Front-End &amp; Diode Mixer Schematic)</h3>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="text-slate-400">คลิกที่หัวโพรบ (Probe) บนวงจร หรือเลือก:</span>
+                    <div class="inline-flex rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+                        <button onclick="setActiveProbe('all')" id="btn-probe-all" class="px-2.5 py-1 rounded bg-cyan-600 text-white font-semibold transition">ดูทั้งหมด (3 ช่อง)</button>
+                        <button onclick="setActiveProbe('rf')" id="btn-probe-rf" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">โพรบ 1 (RF)</button>
+                        <button onclick="setActiveProbe('lo')" id="btn-probe-lo" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">โพรบ 2 (LO)</button>
+                        <button onclick="setActiveProbe('if')" id="btn-probe-if" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">โพรบ 3 (IF)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SVG Circuit Diagram Container -->
+            <div class="w-full overflow-x-auto bg-slate-950 rounded-xl border border-slate-800/80 p-2 md:p-4">
+                <svg viewBox="0 0 950 280" class="w-full min-w-[750px] h-auto select-none font-mono-code text-xs">
+                    <defs>
+                        <!-- Glow Filters for Probes -->
+                        <filter id="glow-yellow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter>
+                        <filter id="glow-purple" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter>
+                        <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter>
+                    </defs>
+
+                    <!-- Circuit Ground Bus Line -->
+                    <line x1="80" y1="230" x2="880" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+                    
+                    <!-- Ground Symbol -->
+                    <g transform="translate(880, 230)">
+                        <line x1="0" y1="0" x2="0" y2="15" stroke="#475569" stroke-width="3"/>
+                        <line x1="-15" y1="15" x2="15" y2="15" stroke="#475569" stroke-width="3"/>
+                        <line x1="-10" y1="21" x2="10" y2="21" stroke="#475569" stroke-width="2.5"/>
+                        <line x1="-4" y1="27" x2="4" y2="27" stroke="#475569" stroke-width="2"/>
+                        <text x="20" y="22" fill="#64748b" font-size="11">GND (0V)</text>
+                    </g>
+
+                    <!-- Main Signal Rails & Components -->
+                    <line x1="80" y1="90" x2="220" y2="90" stroke="#38bdf8" stroke-width="2.5"/>
+                    <line x1="80" y1="130" x2="80" y2="230" stroke="#475569" stroke-width="2.5"/>
+
+                    <!-- Source 1: RF Input -->
+                    <g transform="translate(80, 110)">
+                        <circle cx="0" cy="0" r="20" fill="#0f172a" stroke="#38bdf8" stroke-width="2.5"/>
+                        <path d="M -10 0 Q -5 -10 0 0 T 10 0" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+                        <text x="-65" y="-5" fill="#facc15" font-weight="bold" font-size="11">RF Input</text>
+                        <text x="-75" y="12" fill="#94a3b8" font-size="10">514 kHz (5V)</text>
+                    </g>
+
+                    <!-- LC Filter: C1 (10nF) -->
+                    <line x1="220" y1="90" x2="220" y2="140" stroke="#94a3b8" stroke-width="2"/>
+                    <line x1="205" y1="140" x2="235" y2="140" stroke="#38bdf8" stroke-width="3"/>
+                    <line x1="205" y1="148" x2="235" y2="148" stroke="#38bdf8" stroke-width="3"/>
+                    <line x1="220" y1="148" x2="220" y2="230" stroke="#94a3b8" stroke-width="2"/>
+                    <circle cx="220" cy="90" r="4" fill="#38bdf8"/>
+                    <circle cx="220" cy="230" r="4" fill="#475569"/>
+                    <text x="240" y="148" fill="#cbd5e1" font-size="11">C1: 10nF</text>
+
+                    <!-- LC Filter: L1 (10uH) -->
+                    <line x1="220" y1="90" x2="260" y2="90" stroke="#94a3b8" stroke-width="2"/>
+                    <path d="M 260 90 A 10 10 0 0 1 280 90 A 10 10 0 0 1 300 90 A 10 10 0 0 1 320 90 A 10 10 0 0 1 340 90" fill="none" stroke="#fbbf24" stroke-width="3"/>
+                    <line x1="340" y1="90" x2="380" y2="90" stroke="#94a3b8" stroke-width="2"/>
+                    <text x="280" y="70" fill="#fbbf24" font-size="11" font-weight="bold">L1: 10µH</text>
+
+                    <!-- LC Filter: C2 (10nF) -->
+                    <line x1="380" y1="90" x2="380" y2="140" stroke="#94a3b8" stroke-width="2"/>
+                    <line x1="365" y1="140" x2="395" y2="140" stroke="#38bdf8" stroke-width="3"/>
+                    <line x1="365" y1="148" x2="395" y2="148" stroke="#38bdf8" stroke-width="3"/>
+                    <line x1="380" y1="148" x2="380" y2="230" stroke="#94a3b8" stroke-width="2"/>
+                    <circle cx="380" cy="90" r="4" fill="#38bdf8"/>
+                    <circle cx="380" cy="230" r="4" fill="#475569"/>
+                    <text x="400" y="148" fill="#cbd5e1" font-size="11">C2: 10nF</text>
+
+                    <!-- Stage Box: LC Band-pass Filter -->
+                    <rect x="180" y="45" width="235" height="195" rx="8" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="4 4"/>
+                    <text x="190" y="60" fill="#38bdf8" font-size="10" font-weight="bold">LC Band-pass Filter (514 kHz)</text>
+
+                    <!-- Wire to Mixer node -->
+                    <line x1="380" y1="90" x2="520" y2="90" stroke="#38bdf8" stroke-width="2.5"/>
+
+                    <!-- Source 2: LO Local Oscillator -->
+                    <g transform="translate(480, 180)">
+                        <circle cx="0" cy="0" r="18" fill="#0f172a" stroke="#c084fc" stroke-width="2.5"/>
+                        <path d="M -8 0 Q -4 -8 0 0 T 8 0" fill="none" stroke="#c084fc" stroke-width="2.5"/>
+                        <text x="-80" y="5" fill="#e879f9" font-weight="bold" font-size="11">LO (550 kHz)</text>
+                    </g>
+                    <line x1="480" y1="198" x2="480" y2="230" stroke="#475569" stroke-width="2"/>
+                    <circle cx="480" cy="230" r="4" fill="#475569"/>
+                    <line x1="480" y1="162" x2="520" y2="90" stroke="#c084fc" stroke-width="2.5"/>
+                    <circle cx="520" cy="90" r="5" fill="#e879f9"/>
+
+                    <!-- Diode Mixer (D1) -->
+                    <g transform="translate(560, 90)">
+                        <line x1="-40" y1="0" x2="-15" y2="0" stroke="#94a3b8" stroke-width="2.5"/>
+                        <polygon points="-15,-14 10,0 -15,14" fill="#10b981" stroke="#10b981" stroke-width="2"/>
+                        <line x1="10" y1="-14" x2="10" y2="14" stroke="#10b981" stroke-width="3"/>
+                        <line x1="10" y1="0" x2="35" y2="0" stroke="#94a3b8" stroke-width="2.5"/>
+                        <text x="-12" y="-20" fill="#34d399" font-weight="bold" font-size="11">Diode Mixer (D1)</text>
+                    </g>
+
+                    <!-- Wire to IF Tank -->
+                    <line x1="595" y1="90" x2="700" y2="90" stroke="#34d399" stroke-width="2.5"/>
+
+                    <!-- IF Filter: C_if (4.7nF) -->
+                    <line x1="700" y1="90" x2="700" y2="140" stroke="#94a3b8" stroke-width="2"/>
+                    <line x1="685" y1="140" x2="715" y2="140" stroke="#34d399" stroke-width="3"/>
+                    <line x1="685" y1="148" x2="715" y2="148" stroke="#34d399" stroke-width="3"/>
+                    <line x1="700" y1="148" x2="700" y2="230" stroke="#94a3b8" stroke-width="2"/>
+                    <circle cx="700" cy="90" r="4" fill="#34d399"/>
+                    <circle cx="700" cy="230" r="4" fill="#475569"/>
+                    <text x="720" y="148" fill="#cbd5e1" font-size="11">C_if: 4.7nF</text>
+
+                    <!-- Load: R_load (1k) -->
+                    <line x1="700" y1="90" x2="800" y2="90" stroke="#34d399" stroke-width="2.5"/>
+                    <line x1="800" y1="90" x2="800" y2="135" stroke="#94a3b8" stroke-width="2"/>
+                    <rect x="792" y="135" width="16" height="40" fill="#1e293b" stroke="#cbd5e1" stroke-width="2"/>
+                    <line x1="800" y1="175" x2="800" y2="230" stroke="#94a3b8" stroke-width="2"/>
+                    <circle cx="800" cy="90" r="4" fill="#34d399"/>
+                    <circle cx="800" cy="230" r="4" fill="#475569"/>
+                    <text x="820" y="160" fill="#cbd5e1" font-size="11">R_L: 1kΩ</text>
+
+                    <!-- Stage Box: IF Detector & Tank -->
+                    <rect x="660" y="45" width="180" height="195" rx="8" fill="none" stroke="#059669" stroke-width="1.5" stroke-dasharray="4 4"/>
+                    <text x="670" y="60" fill="#34d399" font-size="10" font-weight="bold">IF Low-pass &amp; Load</text>
+
+                    <!-- Interactive Measurement PROBES -->
+                    <!-- PROBE 1: RF Input -->
+                    <g onclick="setActiveProbe('rf')" class="cursor-pointer" transform="translate(130, 90)">
+                        <circle cx="0" cy="0" r="14" fill="#facc15" fill-opacity="0.25" stroke="#facc15" stroke-width="2" filter="url(#glow-yellow)"/>
+                        <circle cx="0" cy="0" r="6" fill="#facc15"/>
+                        <path d="M 0 -14 L 0 -40 L 45 -40" fill="none" stroke="#facc15" stroke-width="2"/>
+                        <rect x="45" y="-52" width="75" height="24" rx="4" fill="#1e293b" stroke="#facc15" stroke-width="1.5"/>
+                        <text x="52" y="-36" fill="#facc15" font-weight="bold" font-size="10">จุดที่ 1 : RF</text>
+                    </g>
+
+                    <!-- PROBE 2: LO Signal -->
+                    <g onclick="setActiveProbe('lo')" class="cursor-pointer" transform="translate(480, 140)">
+                        <circle cx="0" cy="0" r="14" fill="#c084fc" fill-opacity="0.25" stroke="#c084fc" stroke-width="2" filter="url(#glow-purple)"/>
+                        <circle cx="0" cy="0" r="6" fill="#c084fc"/>
+                        <path d="M 0 -14 L 0 -35 L -45 -35" fill="none" stroke="#c084fc" stroke-width="2"/>
+                        <rect x="-120" y="-47" width="75" height="24" rx="4" fill="#1e293b" stroke="#c084fc" stroke-width="1.5"/>
+                        <text x="-113" y="-31" fill="#c084fc" font-weight="bold" font-size="10">จุดที่ 2 : LO</text>
+                    </g>
+
+                    <!-- PROBE 3: IF Output -->
+                    <g onclick="setActiveProbe('if')" class="cursor-pointer" transform="translate(750, 90)">
+                        <circle cx="0" cy="0" r="14" fill="#10b981" fill-opacity="0.25" stroke="#10b981" stroke-width="2" filter="url(#glow-green)"/>
+                        <circle cx="0" cy="0" r="6" fill="#10b981"/>
+                        <path d="M 0 -14 L 0 -40 L 35 -40" fill="none" stroke="#10b981" stroke-width="2"/>
+                        <rect x="35" y="-52" width="75" height="24" rx="4" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+                        <text x="42" y="-36" fill="#34d399" font-weight="bold" font-size="10">จุดที่ 3 : IF</text>
+                    </g>
+                </svg>
+            </div>
+        </section>
+
+        <!-- 2. Virtual Digital Oscilloscope Section -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+            <!-- Scope Header Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+                    <h3 class="font-bold text-white text-base flex items-center gap-2">
+                        <span>ออสซิลโลสโคป 3 ช่องสัญญาณเสมือน (Digital Storage Oscilloscope: DSO)</span>
+                    </h3>
+                </div>
+
+                <!-- Scope Operating Controls -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="btn-play-pause" onclick="togglePlayPause()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition">
+                        <svg id="icon-pause" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                        <span id="text-play-pause">หยุดการจำลอง (Freeze)</span>
+                    </button>
+                    <button onclick="resetScopeParams()" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+                        รีเซ็ตมุมมอง
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scope Screen Canvas -->
+            <div class="relative w-full aspect-[21/9] min-h-[300px] max-h-[440px] rounded-xl overflow-hidden border-2 border-slate-700 shadow-inner scope-screen select-none">
+                <canvas id="scopeCanvas" class="w-full h-full"></canvas>
+
+                <!-- Scope Channel Toggles & Legends (Bottom Left) -->
+                <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-2 text-xs font-mono-code">
+                    <div onclick="toggleChannel(1)" class="cursor-pointer bg-slate-950/80 px-2.5 py-1 rounded-lg border border-yellow-500/40 text-yellow-400 flex items-center gap-1.5 hover:bg-yellow-950/40 transition">
+                        <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                        <span>CH1: RF (514 kHz)</span>
+                    </div>
+                    <div onclick="toggleChannel(2)" class="cursor-pointer bg-slate-950/80 px-2.5 py-1 rounded-lg border border-fuchsia-500/40 text-fuchsia-400 flex items-center gap-1.5 hover:bg-fuchsia-950/40 transition">
+                        <span class="w-2.5 h-2.5 rounded-full bg-fuchsia-400"></span>
+                        <span>CH2: LO (550 kHz)</span>
+                    </div>
+                    <div onclick="toggleChannel(3)" class="cursor-pointer bg-slate-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/40 text-emerald-400 flex items-center gap-1.5 hover:bg-emerald-950/40 transition">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span>CH3: IF Output (36 kHz)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scope Sliders & Timebase Adjustments -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <!-- Time/Div Slider -->
+                <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Time Scale (เวลาต่อช่อง):</span>
+                        <span id="val-time-scale" class="font-mono-code text-cyan-400 font-bold">5.0 µs / div</span>
+                    </div>
+                    <input id="slider-timescale" type="range" min="1" max="20" step="0.5" value="5" oninput="updateTimeScale(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+                    <div class="flex justify-between text-[10px] font-mono-code text-slate-500">
+                        <span>1 µs (ซูมคลื่น RF/LO)</span>
+                        <span>10 µs</span>
+                        <span>20 µs (ดูคลื่น IF 36 kHz)</span>
+                    </div>
+                </div>
+
+                <!-- Volts/Div Slider -->
+                <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Volts / Div (สเกลแรงดัน):</span>
+                        <span id="val-volts-scale" class="font-mono-code text-amber-400 font-bold">2.0 V / div</span>
+                    </div>
+                    <input id="slider-voltscale" type="range" min="0.5" max="5" step="0.5" value="2" oninput="updateVoltScale(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                    <div class="flex justify-between text-[10px] font-mono-code text-slate-500">
+                        <span>0.5 V/div</span>
+                        <span>2.0 V/div (ปกติ)</span>
+                        <span>5.0 V/div</span>
+                    </div>
+                </div>
+
+                <!-- Sim Speed Slider -->
+                <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Simulation Speed (ความเร็วการวิ่ง):</span>
+                        <span id="val-speed" class="font-mono-code text-emerald-400 font-bold">1.0x (ปกติ)</span>
+                    </div>
+                    <input id="slider-speed" type="range" min="0.1" max="3" step="0.1" value="1" oninput="updateSpeed(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                    <div class="flex justify-between text-[10px] font-mono-code text-slate-500">
+                        <span>0.1x (ชะลอเพื่อดูคลื่น)</span>
+                        <span>1.0x</span>
+                        <span>3.0x</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
+        สื่อการเรียนการสอนรายวิชาโทรทัศน์ระบบดิจิทัล (20105-2016) • ออกแบบเพื่อสนับสนุนการปฏิบัติการใบงานที่ 5
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // ==================== STATE MANAGEMENT ====================
+        let isRunning = true;
+        let timeScale = 5.0; // microseconds per division (50px = 1 div)
+        let voltsScale = 2.0; // volts per division
+        let simSpeed = 1.0;
+        let simTime = 0; // in microseconds
+        let lastFrameTimestamp = null;
+
+        // Active Probe Filter: 'all', 'rf', 'lo', 'if'
+        let activeProbe = 'all';
+
+        // Oscilloscope Trace Display Toggles
+        const channels = {
+            1: true, // RF
+            2: true, // LO
+            3: true  // IF
+        };
+
+        // Frequencies in scaled units (kHz)
+        const FREQ_RF = 514.0; // kHz (representing 514 MHz)
+        const FREQ_LO = 550.0; // kHz (representing 550 MHz)
+        const FREQ_IF = Math.abs(FREQ_LO - FREQ_RF); // 36.0 kHz
+
+        // Canvas Setup
+        const canvas = document.getElementById('scopeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // ==================== CONTROLS & EVENT LISTENERS ====================
+        function togglePlayPause() {
+            isRunning = !isRunning;
+            const btn = document.getElementById('btn-play-pause');
+            const txt = document.getElementById('text-play-pause');
+            const icon = document.getElementById('icon-pause');
+            if (isRunning) {
+                btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition";
+                txt.innerText = "หยุดการจำลอง (Freeze)";
+                icon.innerHTML = '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path>';
+            } else {
+                btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1.5 transition";
+                txt.innerText = "เริ่มจำลองต่อ (Run)";
+                icon.innerHTML = '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path>';
+            }
+        }
+
+        function updateTimeScale(val) {
+            timeScale = parseFloat(val);
+            document.getElementById('val-time-scale').innerText = timeScale.toFixed(1) + " µs / div";
+        }
+
+        function updateVoltScale(val) {
+            voltsScale = parseFloat(val);
+            document.getElementById('val-volts-scale').innerText = voltsScale.toFixed(1) + " V / div";
+        }
+
+        function updateSpeed(val) {
+            simSpeed = parseFloat(val);
+            document.getElementById('val-speed').innerText = simSpeed.toFixed(1) + "x";
+        }
+
+        function toggleChannel(ch) {
+            channels[ch] = !channels[ch];
+        }
+
+        function setActiveProbe(probe) {
+            activeProbe = probe;
+            ['all', 'rf', 'lo', 'if'].forEach(p => {
+                const btn = document.getElementById(`btn-probe-${p}`);
+                if (p === probe) {
+                    btn.className = "px-2.5 py-1 rounded bg-cyan-600 text-white font-semibold transition";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white transition";
+                }
+            });
+
+            if (probe === 'rf') {
+                channels[1] = true; channels[2] = false; channels[3] = false;
+            } else if (probe === 'lo') {
+                channels[1] = false; channels[2] = true; channels[3] = false;
+            } else if (probe === 'if') {
+                channels[1] = false; channels[2] = false; channels[3] = true;
+                timeScale = 12.0;
+                document.getElementById('slider-timescale').value = 12.0;
+                document.getElementById('val-time-scale').innerText = "12.0 µs / div";
+            } else {
+                channels[1] = true; channels[2] = true; channels[3] = true;
+            }
+        }
+
+        function resetScopeParams() {
+            timeScale = 5.0;
+            voltsScale = 2.0;
+            simSpeed = 1.0;
+            document.getElementById('slider-timescale').value = 5.0;
+            document.getElementById('slider-voltscale').value = 2.0;
+            document.getElementById('slider-speed').value = 1.0;
+            document.getElementById('val-time-scale').innerText = "5.0 µs / div";
+            document.getElementById('val-volts-scale').innerText = "2.0 V / div";
+            document.getElementById('val-speed').innerText = "1.0x (ปกติ)";
+            channels[1] = true; channels[2] = true; channels[3] = true;
+            setActiveProbe('all');
+        }
+
+        // ==================== ANIMATION LOOP & WAVEFORM RENDERING ====================
+        function renderOscilloscope(timestamp) {
+            if (!lastFrameTimestamp) lastFrameTimestamp = timestamp;
+            const deltaMs = timestamp - lastFrameTimestamp;
+            lastFrameTimestamp = timestamp;
+
+            if (isRunning) {
+                simTime += (deltaMs / 16.6) * 0.03 * simSpeed;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            const cy = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Scale constants
+            const divSize = 50;
+            const pixelsPerMicrosec = divSize / timeScale;
+            const pixelsPerVolt = divSize / voltsScale;
+
+            // 1. Draw Grid
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < w; x += divSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+            for (let y = 0; y < h; y += divSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            // Center Crosshair Axis
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+            ctx.stroke();
+
+            // 2. Waveforms Rendering
+            const wRF = 2 * Math.PI * (FREQ_RF / 1000.0);
+            const wLO = 2 * Math.PI * (FREQ_LO / 1000.0);
+
+            // Trace 1: RF Input Signal
+            if (channels[1]) {
+                ctx.strokeStyle = '#facc15';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let px = 0; px < w; px++) {
+                    const t = px / pixelsPerMicrosec + simTime;
+                    const v = 5.0 * Math.sin(wRF * t);
+                    const py = cy - v * pixelsPerVolt;
+                    if (px === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+
+            // Trace 2: LO Signal
+            if (channels[2]) {
+                ctx.strokeStyle = '#e879f9';
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                for (let px = 0; px < w; px++) {
+                    const t = px / pixelsPerMicrosec + simTime;
+                    const v = 5.0 * Math.sin(wLO * t);
+                    const py = cy - v * pixelsPerVolt;
+                    if (px === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+
+            // Trace 3: IF Output Signal
+            if (channels[3]) {
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+
+                for (let px = 0; px < w; px++) {
+                    const t = px / pixelsPerMicrosec + simTime;
+                    const wIF = 2 * Math.PI * (FREQ_IF / 1000.0);
+                    const vEnvelope = 2.5 + 2.5 * Math.sin(wIF * t - Math.PI / 2);
+                    const ripple = 0.25 * Math.sin(wRF * t * 2);
+                    const vOut = vEnvelope + ripple;
+
+                    const py = cy - vOut * pixelsPerVolt;
+                    if (px === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+
+            requestAnimationFrame(renderOscilloscope);
+        }
+
+        // ==================== INITIALIZATION ====================
+        window.addEventListener('DOMContentLoaded', () => {
+            resizeCanvas();
+            requestAnimationFrame(renderOscilloscope);
+        });
+    </script>
+</body>
+</html>
